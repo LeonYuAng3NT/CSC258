@@ -1,0 +1,2 @@
+Info (10281): Verilog HDL Declaration information at project.v(525): object "XBlockOut" differs only in case from object "xblockout" in the same scope
+Info (10281): Verilog HDL Declaration information at project.v(526): object "YBlockOut" differs only in case from object "yblockout" in the same scope

@@ -1,0 +1,240 @@
+`timescale 1ns / 1ns
+`include "vga_adapter/vga_adapter.v"
+`include "vga_adapter/vga_address_translator.v"
+`include "vga_adapter/vga_controller.v"
+`include "vga_adapter/vga_pll.v"
+
+module project(
+	CLOCK_50,						//	On Board 50 MHz
+	// Inputs and Outputs
+	KEY,
+	SW,
+	// The ports below are for the VGA output.  Do not change.
+	VGA_CLK,   						//	VGA Clock
+	VGA_HS,							//	VGA H_SYNC
+	VGA_VS,							//	VGA V_SYNC
+	VGA_BLANK,						//	VGA BLANK
+	VGA_SYNC,						//	VGA SYNC
+	VGA_R,   						//	VGA Red[9:0]
+	VGA_G,	 						//	VGA Green[9:0]
+	VGA_B   							//	VGA Blue[9:0]
+//	LEDR
+	);
+
+	input	CLOCK_50;				//	50 MHz
+	input [9:0] SW;
+	input [3:0] KEY;
+//	output [9:0] LEDR;
+
+	// Declare your inputs and outputs here
+	// Do not change the following outputs
+	output VGA_CLK;   			//	VGA Clock
+	output VGA_HS;					//	VGA H_SYNC
+	output VGA_VS;					//	VGA V_SYNC
+	output VGA_BLANK;				//	VGA BLANK
+	output VGA_SYNC;				//	VGA SYNC
+	output [9:0] VGA_R;   		//	VGA Red[9:0]
+	output [9:0] VGA_G;	 		//	VGA Green[9:0]
+	output [9:0] VGA_B;   		//	VGA Blue[9:0]
+	
+	wire resetn;
+	assign resetn = KEY[0];
+	wire ld_x;
+	assign ld_x = KEY[3];
+	wire [3:0] ctr_en;
+	assign go = ~KEY[1];
+	
+	// Create the colour, x, y and writeEn wires that are inputs to the controller.
+	wire [2:0] colour;
+	wire [7:0] x;
+	wire [6:0] y;
+	reg [6:0] xIn;
+	wire writeEn;
+	
+	always@(*)
+	begin
+		if (ld_x == 0)
+			xIn = SW [6:0];
+	end
+	
+	
+	// Put your code here. Your code should produce signals x,y,colour and writeEn/plot
+	// for the VGA controller, in addition to any other functionality your design may require.
+ 
+   // Instantiate FSM control
+	controller c0(
+	 .clk(CLOCK_50),
+	 .resetn(resetn),
+	 .go(go),
+	 .plot(writeEn),
+	 .counter(ctr_en)
+    );
+	 
+	// Instantiate datapath
+   datapath d0(
+    .clk(CLOCK_50),
+    .resetn(resetn),
+    .XPosition({1'b0, xIn}),
+	 .YPosition(SW[6:0]),
+	 .colorIn(SW[9:7]),
+	 .counter(ctr_en),
+	 .XOut(x), 
+	 .YOut(y),
+	 .ColorOut(colour)
+    );
+	// Create an Instance of a VGA controller - there can be only one!
+	// Define the number of colours as well as the initial background
+	// image file (.MIF) for the controller.
+	vga_adapter VGA(
+		.resetn(resetn),
+		.clock(CLOCK_50),
+		.colour(colour),
+		.x(x),
+		.y(y),
+		.plot(writeEn),
+		/* Signals for the DAC to drive the monitor. */
+		.VGA_R(VGA_R),
+		.VGA_G(VGA_G),
+		.VGA_B(VGA_B),
+		.VGA_HS(VGA_HS),
+		.VGA_VS(VGA_VS),
+		.VGA_BLANK(VGA_BLANK),
+		.VGA_SYNC(VGA_SYNC),
+		.VGA_CLK(VGA_CLK));
+	defparam VGA.RESOLUTION = "160x120";
+	defparam VGA.MONOCHROME = "FALSE";
+	defparam VGA.BITS_PER_COLOUR_CHANNEL = 1;
+	defparam VGA.BACKGROUND_IMAGE = "black.mif";
+	
+	//assign LEDR[8:0] = VGA_HS;
+endmodule
+
+module controller(
+    input clk,
+    input resetn,
+    input go,
+	 output reg plot,
+	 //output reg load_x,
+	 output [3:0] counter
+    );
+
+	 reg [3:0]count = 4'b0000;
+    reg [5:0] current_state, next_state; 
+    
+    localparam  STATE1        = 5'd0,
+                STATE2	      = 5'd1,
+                STATE3        = 5'd2;
+    
+    // Next state logic aka our state table
+    always@(*)
+    begin: state_table 
+		case (current_state)
+			STATE1: next_state = go ? STATE2 : STATE1;		// Loop in current state until value is input
+			STATE2: next_state = (count < 4'b1111) ? STATE2 : STATE3; 	// Loop in current state until go signal goes low
+			STATE3: next_state = STATE1;
+			default:     next_state = STATE1;
+		endcase
+    end // state_table
+    // Output logic aka all of our datapath control signals
+	 
+
+	
+    always @(posedge clk)
+    begin: enable_signals
+        // By default make all our signals 0
+		  //load_x = 1'b0;
+//		  load_y = 1'b0;
+		  count <= 4'b0000;
+		  
+        case (current_state)
+            STATE1: begin
+                //count = count;
+					 plot <= 1'b0;
+            end
+            STATE2: begin
+					 plot <= 1'b1;
+					 count <= count + 4'b0001;
+            end
+            STATE3: begin 
+                count <= 4'b0;
+					 plot <= 1'b1;
+            end
+        // default:    // don't need default since we already made sure all of our outputs were assigned a value at the start of the always block
+        endcase
+    end // enable_signals
+   
+    // current_state registers
+    always@(posedge clk)
+    begin: state_FFs
+        if(!resetn)
+            current_state <= STATE1;
+        else
+            current_state <= next_state;
+    end // state_FFS
+	 
+	 assign counter = count;
+endmodule
+
+module datapath(
+    input clk,
+    input resetn,
+    input [7:0] XPosition,
+	 input [6:0] YPosition,
+	 input [2:0] colorIn, // or 8:0 ?
+    //input load_x,
+	 //input load_y,
+	 input [3:0] counter,
+	 output reg [7:0] XOut, 
+	 output reg [6:0] YOut,
+	 output reg [2:0] ColorOut
+    );
+    
+    // input registers
+
+	 //reg [2:0] color;
+    // Registers a, b, c, x with respective input logic
+	
+	 
+    always@(*) begin
+        if(!resetn) begin
+            XOut = 8'b0; 
+            YOut = 7'b0;
+	    ColorOut = colorIn;
+				//counter_output <= 4'b0;
+        end
+        else begin
+		if (counter != 4'b1111) begin
+			XOut = XPosition + {6'b0, counter[1:0]};
+			YOut = YPosition + {5'b0, counter[3:2]};
+			ColorOut = colorIn;
+		end
+		else begin
+			XOut = XPosition + {6'b0, counter[1:0]};
+			YOut = YPosition + {5'b0, counter[3:2]};
+			ColorOut = colorIn;
+		end
+        end
+    end
+	 
+	//counter ctr0(
+	//	.q(counter_output), 
+	//	.Clear_b(1'b1),  // Do we need clear_b?  or Do we need Enable?
+	//	.Enable(counter_en), 
+	//	.clock(clk)
+	//	);  // counter should be inside the always block
+
+endmodule
+
+
+
+module counter(q, Clear_b, Enable, clock);
+	input Clear_b, Enable, clock;
+	output reg [3:0] q; // declare q
+	always @(posedge clock) // triggered every time clock rises
+	begin
+		if (Clear_b == 1'b0) // when Clear b is 0
+			q <= 0; // q is set to 0
+		else if (Enable == 1'b1) // increment q only when Enable is 1
+			q <= q + 1'b1; // increment q
+	end
+endmodule
