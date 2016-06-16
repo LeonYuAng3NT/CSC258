@@ -13,13 +13,9 @@ Project:
   
   Instructions: In order to compile the game, user has to download Quartus two and to prepare a DE1-SoC board with FPGA chips. 
   All softwares and hardwares are available in University of Toronto's Bahen Center of Inofrmation Technogloy building embedded System lab rooms. In order to compile the game, do the following:
-  1. Open Quartus II and go to File > New... and select New Quartus II Project.
-  2. Click Next and under Directory, Name, Top-Level Entity select your working directory and type the name
-      of your project. The top-level design will automatically fill out to be the same name as your project.
-
+  1. Open Quartus II and go to File > Open and find the location of the folder where you check out.
+  2. Find project.qsf and Click open
   3. If you open Assignments > Pin Planner, you can see all the assignments of signal names to pin numbers
-      (e.g., SW[0] to pin number PIN AB12).
-
   4. Once you have completed your design, click Processing > Start Compilation.
   5. When compilation is done, click Tools > Programmer and a window will appear.
   6. Go to Hardware Setup and ensure Currently Selected Hardware is DE1-SoC [USB-x] and close the window.
